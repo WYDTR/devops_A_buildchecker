@@ -4,7 +4,7 @@
 #   2. 系统工具和 Python 包的实际版本在构建时写入 /opt/toolchain.lock
 #   3. Python 依赖按锁文件和哈希安装
 #   4. 以普通用户 app 运行；.env、work/、.git 不会进入镜像（见 .dockerignore）
-ARG BASE_IMAGE=python:3.13-slim@sha256:f82c96458eedc847b233e582eb31336f4954b39cae020b6dcf5b3ed0e5cbcd74
+ARG BASE_IMAGE=m.daocloud.io/docker.io/library/python:3.13-slim@sha256:f82c96458eedc847b233e582eb31336f4954b39cae020b6dcf5b3ed0e5cbcd74
 FROM ${BASE_IMAGE}
 
 ENV LC_ALL=C.UTF-8 \

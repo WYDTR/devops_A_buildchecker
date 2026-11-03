@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # BuildChecker 服务镜像（A 组）。构建上下文是仓库根目录：docker compose build 或 make build。
 #   1. 基础镜像按 digest 固定；升级时只改 BASE_IMAGE 这一行，并在提交说明里写新 digest
 #   2. 系统工具和 Python 包的实际版本在构建时写入 /opt/toolchain.lock
@@ -12,7 +11,8 @@ ENV LC_ALL=C.UTF-8 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN apt-get update \
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+ && apt-get update \
  && apt-get install -y --no-install-recommends gcc make libc6-dev strace git \
  && rm -rf /var/lib/apt/lists/* \
  && dpkg-query -W -f='${Package}=${Version}\n' gcc make libc6-dev strace git > /opt/toolchain.lock \
@@ -20,7 +20,7 @@ RUN apt-get update \
  && echo "arch=$(dpkg --print-architecture)" >> /opt/toolchain.lock
 
 COPY requirements-dev.lock /tmp/requirements-dev.lock
-RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements-dev.lock \
+RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements-dev.lock --index-url https://mirrors.aliyun.com/pypi/simple \
  && pip freeze | sed 's/^/pip:/' >> /opt/toolchain.lock
 
 # 先建用户和 /app，再复制代码：/app 必须归 app 所有，否则运行时无法写入

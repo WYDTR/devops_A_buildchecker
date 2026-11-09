@@ -39,4 +39,179 @@ class ProfileTests(unittest.TestCase):
         (self.p/'Makefile').write_text((self.p/'Makefile').read_text().replace('-O0','-include unknown.h'))
         with self.assertRaisesRegex(ValueError,'UNSUPPORTED_FLAGS'):scan(self.p)
 
+
+class Student241880331E8(unittest.TestCase):
+    def test_indirect_include_add_and_remove(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p = Path(directory)/'sample'
+            fixture(p)
+            baseline = scan(p)
+
+            # 仅修改已有头文件，不增加源文件集合中的文件。
+            (p/'config.h').write_text(
+                '#include "extra.h"\n#define VALUE 1\n'
+            )
+            commit(p, 'student E8: add indirect include')
+            added = scan(p, baseline)
+            full = scan(p)
+
+            self.assertEqual(
+                added['actual'],
+                {
+                    'main.o': ['config.h', 'extra.h', 'main.c'],
+                    'helper.o': ['helper.c'],
+                },
+            )
+            self.assertEqual(added['reused'], [])
+            self.assertEqual(
+                set(added['refreshed']), {'main.o', 'helper.o'}
+            )
+            self.assertEqual(
+                added['added'], [['MISSING', 'main.o', 'extra.h']]
+            )
+            self.assertEqual(
+                {(f['type'], f['target'], f['dependency'])
+                 for f in added['findings']},
+                {
+                    ('MISSING', 'main.o', 'config.h'),
+                    ('MISSING', 'main.o', 'extra.h'),
+                    ('REDUNDANT', 'main.o', 'unused.h'),
+                },
+            )
+            for key in ['actual', 'declared', 'findings']:
+                self.assertEqual(added[key], full[key])
+
+            # 移除间接包含，验证新增 MD 随之消除。
+            (p/'config.h').write_text('#define VALUE 1\n')
+            commit(p, 'student E8: remove indirect include')
+            removed = scan(p, added)
+            full_after_remove = scan(p)
+
+            self.assertEqual(removed['actual'], baseline['actual'])
+            self.assertEqual(removed['findings'], baseline['findings'])
+            self.assertEqual(
+                removed['resolved'],
+                [['MISSING', 'main.o', 'extra.h']],
+            )
+            self.assertEqual(removed['added'], [])
+            self.assertEqual(removed['reused'], [])
+            self.assertEqual(
+                set(removed['refreshed']), {'main.o', 'helper.o'}
+            )
+            for key in ['actual', 'declared', 'findings']:
+                self.assertEqual(removed[key], full_after_remove[key])
+
+
+class Student241880331E9(unittest.TestCase):
+    def test_indirect_include_resolves_redundant_dependency(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p = Path(directory)/'sample'
+            fixture(p)
+            baseline = scan(p)
+
+            (p/'config.h').write_text(
+                '#include "extra.h"\n#define VALUE 1\n'
+            )
+            (p/'extra.h').write_text(
+                '#include "unused.h"\n#define EXTRA 0\n'
+            )
+            commit(p, 'student E9: make redundant header reachable')
+
+            incremental = scan(p, baseline)
+            full = scan(p)
+
+            self.assertEqual(
+                incremental['actual'],
+                {
+                    'main.o': [
+                        'config.h', 'extra.h', 'main.c', 'unused.h'
+                    ],
+                    'helper.o': ['helper.c'],
+                },
+            )
+            self.assertEqual(
+                incremental['declared'], baseline['declared']
+            )
+            self.assertEqual(incremental['reused'], [])
+            self.assertEqual(
+                set(incremental['refreshed']), {'main.o', 'helper.o'}
+            )
+            self.assertEqual(
+                incremental['added'],
+                [['MISSING', 'main.o', 'extra.h']],
+            )
+            self.assertEqual(
+                incremental['resolved'],
+                [['REDUNDANT', 'main.o', 'unused.h']],
+            )
+            self.assertEqual(
+                {(f['type'], f['target'], f['dependency'])
+                 for f in incremental['findings']},
+                {
+                    ('MISSING', 'main.o', 'config.h'),
+                    ('MISSING', 'main.o', 'extra.h'),
+                },
+            )
+            for key in ['actual', 'declared', 'findings']:
+                self.assertEqual(incremental[key], full[key])
+
+
+class Student241880331E10(unittest.TestCase):
+    def test_macro_flag_activates_indirect_header(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p = Path(directory)/'sample'
+            fixture(p)
+            (p/'config.h').write_text(
+                '#if MODE == 1\n#include "extra.h"\n'
+                '#endif\n#define VALUE 1\n'
+            )
+            commit(p, 'student E10: conditional header baseline')
+            baseline = scan(p)
+            self.assertEqual(
+                baseline['actual']['main.o'], ['config.h', 'main.c']
+            )
+
+            f = p/'Makefile'
+            f.write_text(f.read_text().replace(
+                '-O0', '-O0 -DMODE=1'
+            ))
+            commit(p, 'student E10: activate MODE')
+            incremental = scan(p, baseline)
+            full = scan(p)
+
+            self.assertEqual(
+                incremental['key']['directives'],
+                baseline['key']['directives'],
+            )
+            self.assertEqual(
+                incremental['actual'],
+                {
+                    'main.o': ['config.h', 'extra.h', 'main.c'],
+                    'helper.o': ['helper.c'],
+                },
+            )
+            self.assertEqual(
+                incremental['declared'], baseline['declared']
+            )
+            self.assertEqual(incremental['reused'], [])
+            self.assertEqual(
+                set(incremental['refreshed']), {'main.o', 'helper.o'}
+            )
+            self.assertEqual(
+                incremental['added'],
+                [['MISSING', 'main.o', 'extra.h']],
+            )
+            self.assertEqual(incremental['resolved'], [])
+            self.assertEqual(
+                {(f['type'], f['target'], f['dependency'])
+                 for f in incremental['findings']},
+                {
+                    ('MISSING', 'main.o', 'config.h'),
+                    ('MISSING', 'main.o', 'extra.h'),
+                    ('REDUNDANT', 'main.o', 'unused.h'),
+                },
+            )
+            for key in ['actual', 'declared', 'findings']:
+                self.assertEqual(incremental[key], full[key])
+
 if __name__=='__main__':unittest.main()

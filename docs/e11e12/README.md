@@ -6,4 +6,6 @@
 - [新工具验证配置](../e11e12-build-log-stats-contract.md)
 - [数据与联调记录](数据与联调记录.csv)
 
-原始 data/ 与 work/ 独立归档，最终 PR/CI 的运行编号、链接和提交 SHA 在 CI 取证时保存。
+- [集成 CI 与客户端原件核验](CI_RECORD.md)
+
+原始 data/ 与 work/ 独立归档。实现提交及 CI 已取证，最终交付提交与后续 CI 运行记录随归档保存。
